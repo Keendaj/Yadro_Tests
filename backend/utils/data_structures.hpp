@@ -1,8 +1,9 @@
 #pragma once
 #include "types.hpp"
+#include <unordered_map>
 
 namespace DataCollector
-{
+{   
     struct SystemCPUData
     {
         public:
@@ -87,7 +88,20 @@ namespace DataCollector
             u64 shared_memory = 0;
             float cpu_load = 0;
             float mem_load = 0;
+            double execution_time = 0.0;
             PS state = PS::Sleeping;
             str command = ""; //Command with args which starts this process
+    };
+
+    struct SystemData
+    {
+        std::unordered_map<u64, float> cpus_load;
+        SystemRAMData ram;
+        std::unordered_map<u64, ProcessData> processes;
+
+        float load_avg[3] = {0.0f, 0.0f, 0.0f};
+        u64 uptime_sec = 0;
+        u32 tasks_total = 0;
+        u32 tasks_running = 0;
     };
 };

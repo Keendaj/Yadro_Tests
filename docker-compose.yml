@@ -1,0 +1,22 @@
+services:
+  backend:
+    build: 
+      context: ./backend 
+    volumes:
+      - sockets_volume:/tmp
+    pid: "host" 
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "8080:8080"
+    volumes:
+      - sockets_volume:/tmp
+    depends_on:
+      - backend
+    restart: always 
+
+volumes:
+  sockets_volume:

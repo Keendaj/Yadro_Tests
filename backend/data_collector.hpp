@@ -1,6 +1,7 @@
 #pragma once
-#include "types.hpp"
-#include "data_structures.hpp"
+#include "utils/types.hpp"
+#include "utils/data_structures.hpp"
+#include "utils/logger.hpp"
 #include <unordered_map>
 
 #ifdef DATA_COLLECTOR_REALISATION
@@ -9,6 +10,9 @@
     #include <iomanip>
     #include <sstream>
     #include <unistd.h>
+    #include <pwd.h> 
+    #include <sys/types.h> 
+    #include <algorithm> 
 #endif
 
 namespace DataCollector
@@ -16,18 +20,18 @@ namespace DataCollector
     class DataCollector
     {
         private:
-            SystemCPUData _previous_system_cpu_tick;
+            std::unordered_map<u64, SystemCPUData> _previous_cpus_tick;
             std::unordered_map<u64, ProcessCPUData> _previous_processes_cpu_tick;
 
         protected:
-            SystemCPUData collectCPU();
+            std::unordered_map<u64, SystemCPUData> collectCPU();
 
             SystemRAMData collectRAM();
 
             std::unordered_map<u64, ProcessData> collectProcesses();
         public:
             
-            bool CollectData();
+            SystemData CollectData();
     };
 
     #ifdef DATA_COLLECTOR_REALISATION
@@ -42,44 +46,71 @@ namespace DataCollector
             return std::to_string(uid);
         }
 
-        SystemCPUData DataCollector::collectCPU()
+        std::unordered_map<u64, SystemCPUData> DataCollector::collectCPU()
         {
-            SystemCPUData cpu_result;
+            std::unordered_map<u64, SystemCPUData> cpu_result;
             std::ifstream cpu_file("/proc/stat");
 
             if (!cpu_file.is_open()) {
-                auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-
-                std::cerr << "[" << std::put_time(std::localtime(&now), "%Y-%m-%d %H:%M:%S") 
-                          << "] [Error]: Cannot open /proc/stat" << std::endl;
+                Utils::log("DataCollector", "ERROR", "Cannot open /proc/stat");
                 return cpu_result;
             }
-
-            str name;
-            cpu_file >> name;
             
-            cpu_file >> cpu_result.user 
-                    >> cpu_result.nice 
-                    >> cpu_result.system 
-                    >> cpu_result.idle 
-                    >> cpu_result.iowait 
-                    >> cpu_result.irq 
-                    >> cpu_result.softirq 
-                    >> cpu_result.steal;
+            /*
+                0 - total system cpu data
+                1..N - core cpu data
+            */
+            str line;
+            while (std::getline(cpu_file, line))
+            {
+                if (line.compare(0, 3, "cpu") != 0) {
+                    break;
+                }
+
+                std::istringstream iss(line);
+                str name;
+                iss >> name;
+
+                SystemCPUData data = {};
+
+                iss >> data.user 
+                    >> data.nice 
+                    >> data.system 
+                    >> data.idle 
+                    >> data.iowait 
+                    >> data.irq 
+                    >> data.softirq 
+                    >> data.steal
+                    >> data.guest
+                    >> data.guest_nice;
+                
+                u64 cpu_index = 0;
+
+                if (name == "cpu") {
+                    cpu_index = 0;
+                } else {
+                    try {
+                        u64 core_id = std::stoull(name.substr(3));
+                        cpu_index = core_id + 1;
+                    } 
+                    catch (...) {
+                        continue;
+                    }
+                }
+
+                cpu_result[cpu_index] = data;
+            }
 
             return cpu_result;
         }
 
-        SystemRAMData collectRAM()
+        SystemRAMData DataCollector::collectRAM()
         {
             SystemRAMData ram_result;
             std::ifstream ram_file("/proc/meminfo");
 
             if (!ram_file.is_open()) {
-                auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-
-                std::cerr << "[" << std::put_time(std::localtime(&now), "%Y-%m-%d %H:%M:%S") 
-                          << "] [Error]: Cannot open /proc/meminfo" << std::endl;
+                Utils::log("DataCollector", "ERROR", "Cannot open /proc/meminfo");
                 return ram_result;
             }
             str name;
@@ -131,7 +162,7 @@ namespace DataCollector
             return ram_result;
         }
 
-        std::unordered_map<u64, ProcessData> collectProcesses()
+        std::unordered_map<u64, ProcessData> DataCollector::collectProcesses()
         {
             std::unordered_map<u64, ProcessData> processes_result;
 
@@ -155,7 +186,6 @@ namespace DataCollector
                 std::ifstream status_file(base_path + "/status");
                 if (!status_file.is_open()) {
                     continue;
-                    
                 } 
 
                 str key, value;
@@ -237,16 +267,83 @@ namespace DataCollector
             return processes_result;
         }
 
-        bool DataCollector::CollectData()
+        SystemData DataCollector::CollectData()
         {
-            SystemCPUData current_cpu = collectCPU();
-            SystemRAMData current_ram = collectRAM();
-            const u64 current_total_cpu_time = current_cpu.getTotalTime();
-            const u64 previous_total_cpu_time = _previous_system_cpu_tick.getTotalTime();
-            const u64 total_delta_time = current_total_cpu_time - previous_total_cpu_time;
-            if (total_delta_time == 0)
+            SystemData result;
+            std::unordered_map<u64, SystemCPUData> current_cpu = collectCPU();
+            result.ram = collectRAM();
+
+            std::ifstream uptime_file("/proc/uptime");
+            if (uptime_file.is_open()) {
+                double uptime;
+                uptime_file >> uptime;
+                result.uptime_sec = static_cast<u64>(uptime);
+            }
+
+            std::ifstream loadavg_file("/proc/loadavg");
+            if (loadavg_file.is_open()) {
+                std::string proc_count;
+                loadavg_file >> result.load_avg[0] 
+                            >> result.load_avg[1] 
+                            >> result.load_avg[2] 
+                            >> proc_count;
+                
+                size_t slash_pos = proc_count.find('/');
+                if (slash_pos != std::string::npos) {
+                    result.tasks_running = std::stoul(proc_count.substr(0, slash_pos));
+                    result.tasks_total = std::stoul(proc_count.substr(slash_pos + 1));
+                }
+            }
+
+            static const double clock_ticks_per_sec = static_cast<double>(sysconf(_SC_CLK_TCK));
+
+            u64 global_total_delta = 1;
+
+            for (const auto& [id, current_data] : current_cpu)
             {
-                total_delta_time = 1;
+                auto prev_it = _previous_cpus_tick.find(id);
+                
+                if (prev_it == _previous_cpus_tick.end())
+                {
+                    result.cpus_load[id] = 0.0f;
+                    continue;
+                }
+
+                const SystemCPUData& previous_data = prev_it->second;
+
+                const u64 current_total_time = current_data.getTotalTime();
+                const u64 previous_total_time = previous_data.getTotalTime();
+                
+                if (current_total_time <= previous_total_time)
+                {
+                    result.cpus_load[id] = 0.0f;
+                    continue;
+                }
+
+                const u64 total_delta_time = current_total_time - previous_total_time;
+
+                if (id == 0) {
+                   global_total_delta = total_delta_time;
+                }
+
+                const u64 current_idle = current_data.getTotalSleepTime();
+                const u64 previous_idle = previous_data.getTotalSleepTime();
+                
+                u64 idle_delta = 0;
+                if (current_idle > previous_idle) {
+                    idle_delta = current_idle - previous_idle;
+                }
+
+                float load = 100.0f * (1.0f - static_cast<float>(idle_delta) / static_cast<float>(total_delta_time));
+
+                if (load < 0.0f) {
+                    load = 0.0f;
+                }
+                if (load > 100.0f) {
+                    load = 100.0f;
+                }
+
+                result.cpus_load[id] = load;
             }
 
             auto current_processes = collectProcesses();
@@ -254,23 +351,34 @@ namespace DataCollector
 
             for (auto& [pid, process] : current_processes) 
             {
-                if (current_ram.total > 0) {
-                    process.mem_load = (static_cast<float>(process.resident_set_size) / current_ram.total) * 100.0f;
+                if (result.ram.total > 0) {
+                    process.mem_load = (static_cast<float>(process.resident_set_size) / result.ram.total) * 100.0f;
                 }
 
-                auto it = previous_processes_cpu_tick.find(pid);
-                if (it != previous_processes_cpu_tick.end()) 
+                auto it = _previous_processes_cpu_tick.find(pid);
+                if (it != _previous_processes_cpu_tick.end()) 
                 {
-                    const u64 proc_time_delta = process._total_time - it->second.getTotalTime();
-
-                    process.cpu_load = (static_cast<float>(proc_time_delta) / total_delta) * 100.0f * num_cores;
+                    if (process._total_time >= it->second.getTotalTime()) 
+                    {
+                        const u64 proc_time_delta = process._total_time - it->second.getTotalTime();
+                        
+                        process.cpu_load = (static_cast<float>(proc_time_delta) / global_total_delta) * 100.0f * num_cores;
+                    } 
+                    else 
+                    {
+                        process.cpu_load = 0.0f; 
+                    }
                 }
                 else 
                 {
                     process.cpu_load = 0.0f; 
                 }
+
+                process.execution_time = static_cast<double>(process._total_time) / clock_ticks_per_sec;
             }
-            _previous_system_cpu_tick = current_cpu;
+
+            result.processes = current_processes;
+            _previous_cpus_tick = std::move(current_cpu);
 
             _previous_processes_cpu_tick.clear();
             for (const auto& [pid, process] : current_processes) {
@@ -281,7 +389,7 @@ namespace DataCollector
                 _previous_processes_cpu_tick[pid] = cpu_data;
             }
 
-            return true;
+            return result;
         }
     #endif
 

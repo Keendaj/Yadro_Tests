@@ -5,7 +5,7 @@
 namespace DataCollector 
 {
     using str = std::string;
-    namespace fs = std::filesystem
+    namespace fs = std::filesystem;
 
     using u64 = unsigned long long;
     using u32 = unsigned int;
@@ -24,10 +24,10 @@ namespace DataCollector
         Zombie,
         WaitingDisk,
         Stopped
-    }
+    };
     using PS = ProcessState;
 
-    str to_string(PS state) {
+    inline str to_string(PS state) {
         switch (state) {
             case ProcessState::Sleeping:    return "S";
             case ProcessState::Running:     return "R";
