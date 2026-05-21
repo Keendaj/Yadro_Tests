@@ -71,3 +71,6 @@ Testing/
 run/
 
 node_modules/
+html/
+latex/
+.clang-format

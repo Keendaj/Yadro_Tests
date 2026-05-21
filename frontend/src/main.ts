@@ -87,7 +87,7 @@ const cpuChart = new Chart(cpuCtx, {
         labels: ['Used', 'Idle'],
         datasets: [{
             data: [0, 100],
-            backgroundColor: ['#3b82f6', '#1e293b']
+            backgroundColor: ['#10b981', '#022c22']
         }]
     },
     options: {
@@ -106,7 +106,7 @@ const ramChart = new Chart(ramCtx, {
         labels: ['Used (Apps)', 'Cached', 'Buffers', 'Free'],
         datasets: [{
             data: [0, 0, 0, 100],
-            backgroundColor: ['#ef4444', '#eab308', '#3b82f6', '#1e293b']
+            backgroundColor: ['#047857', '#10b981', '#34d399', '#022c22']
         }]
     },
     options: {
@@ -120,9 +120,9 @@ const ramChart = new Chart(ramCtx, {
 
 function updateUI(data: SystemData) {
     document.getElementById('system-stats')!.innerHTML = `
-        <div>Tasks: <span class="text-slate-200">${data.tasks_total}</span>, <span class="text-green-400">${data.tasks_running} running</span></div>
+        <div>Tasks: <span class="text-emerald-100">${data.tasks_total}</span>, <span class="text-emerald-400">${data.tasks_running} running</span></div>
         <div>Load average: <span class="text-white">${data.load_avg[0].toFixed(2)}</span> ${data.load_avg[1].toFixed(2)} ${data.load_avg[2].toFixed(2)}</div>
-        <div>Uptime: <span class="text-teal-400">${formatUptime(data.uptime_sec)}</span></div>
+        <div>Uptime: <span class="text-emerald-300">${formatUptime(data.uptime_sec)}</span></div>
     `;
 
     const cpuUsed = data.cpu_load;
@@ -134,11 +134,11 @@ function updateUI(data: SystemData) {
     const coresContainer = document.getElementById('cpuCores')!;
     coresContainer.innerHTML = data.cpu_cores.map((load, index) => `
         <div class="flex items-center gap-3 text-sm">
-            <span class="text-slate-400 font-mono w-12">CPU${index}</span>
-            <div class="flex-1 h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-700">
+            <span class="text-emerald-400 font-mono w-12">CPU${index}</span>
+            <div class="flex-1 h-3 bg-emerald-950 rounded-full overflow-hidden border border-emerald-800">
                 <div class="h-full ${getCoreColor(load)} transition-all duration-300 ease-out" style="width: ${load}%"></div>
             </div>
-            <span class="text-slate-300 font-mono w-10 text-right">${load.toFixed(0)}%</span>
+            <span class="text-emerald-300 font-mono w-10 text-right">${load.toFixed(0)}%</span>
         </div>
     `).join('');
 
@@ -147,9 +147,9 @@ function updateUI(data: SystemData) {
     ramChart.update();
 
     document.getElementById('ram-text')!.innerHTML = `
-        <div class="text-xs text-slate-400 mt-2 text-center">
-            Total: <span class="text-slate-200 font-mono">${formatBytes(data.ram.total)}</span><br>
-            Swap Used: <span class="text-slate-200 font-mono">${formatBytes(data.ram.swap_used)}</span> / ${formatBytes(data.ram.swap_total)}
+        <div class="text-xs text-emerald-400 mt-2 text-center">
+            Total: <span class="text-emerald-100 font-mono">${formatBytes(data.ram.total)}</span><br>
+            Swap Used: <span class="text-emerald-100 font-mono">${formatBytes(data.ram.swap_used)}</span> / ${formatBytes(data.ram.swap_total)}
         </div>
     `;
 
@@ -158,28 +158,28 @@ function updateUI(data: SystemData) {
         .sort((a, b) => b.cpu_load - a.cpu_load || b.mem_load - a.mem_load)
 
     tbody.innerHTML = topProcesses.map(p => {
-        const prioColor = p.priority < 0 ? 'text-red-400' : (p.priority > 0 ? 'text-blue-400' : 'text-slate-300');
+        const prioColor = p.priority < 0 ? 'text-red-400' : (p.priority > 0 ? 'text-blue-400' : 'text-emerald-300');
         return `
-        <tr class="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors duration-150">
-            <td class="p-3 text-slate-400 font-mono text-sm">${p.id}</td>
-            <td class="p-3 font-medium text-slate-300">${p.user}</td>
+        <tr class="border-b border-emerald-800/50 hover:bg-emerald-800/30 transition-colors duration-150">
+            <td class="p-3 text-emerald-400 font-mono text-sm">${p.id}</td>
+            <td class="p-3 font-medium text-emerald-200">${p.user}</td>
             <td class="p-3 font-mono text-sm ${prioColor}">${p.priority}</td>
             <td class="p-3">
                 <span class="px-2 py-1 rounded-md text-xs border font-mono ${getStateColor(p.state)}">
                     ${p.state}
                 </span>
             </td>
-            <td class="p-3 text-slate-300 font-mono text-sm">${p.cpu_load.toFixed(1)}%</td>
-            <td class="p-3 text-slate-300 font-mono text-sm">${p.mem_load.toFixed(1)}%</td>
+            <td class="p-3 text-emerald-200 font-mono text-sm">${p.cpu_load.toFixed(1)}%</td>
+            <td class="p-3 text-emerald-200 font-mono text-sm">${p.mem_load.toFixed(1)}%</td>
             <td class="p-3 text-emerald-400 font-mono text-sm">${formatTimePlus(p.execution_time)}</td>
-            <td class="p-3 text-slate-400 font-mono text-sm" title="Resident: ${formatBytes(p.resident_memory)}">
+            <td class="p-3 text-emerald-400 font-mono text-sm" title="Resident: ${formatBytes(p.resident_memory)}">
                 ${formatBytes(p.resident_memory, 0)}
             </td>
-            <td class="p-3 text-slate-400 font-mono text-sm" title="Virtual: ${formatBytes(p.virtual_memory)}">
+            <td class="p-3 text-emerald-400 font-mono text-sm" title="Virtual: ${formatBytes(p.virtual_memory)}">
                 ${formatBytes(p.virtual_memory, 0)}
             </td>
-            <td class="p-3 text-slate-300 max-w-xs truncate" title="${p.command}">
-                <div class="truncate bg-slate-800/50 px-2 py-1 rounded font-mono text-sm">${p.command}</div>
+            <td class="p-3 text-emerald-200 max-w-xs truncate" title="${p.command}">
+                <div class="truncate bg-emerald-950/50 px-2 py-1 rounded font-mono text-sm">${p.command}</div>
             </td>
         </tr>
     `}).join('');
